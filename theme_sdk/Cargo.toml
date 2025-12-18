@@ -1,0 +1,11 @@
+[package]
+name = "sinter_theme_sdk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+sinter_core = { path = "../core" }
+gloo-net = "0.6"
+web-sys = { version = "0.3", features = ["Document", "Element", "HtmlLinkElement", "Window", "HtmlHeadElement"] }
+wasm-bindgen = "0.2"

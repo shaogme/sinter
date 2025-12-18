@@ -1,0 +1,9 @@
+[package]
+name = "sinter_themes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sinter_theme_sdk = { path = "../theme_sdk" }
+sinter_theme_default = { path = "packages/theme_default" }
+sinter_theme_default_light = { path = "packages/theme_default_light" }

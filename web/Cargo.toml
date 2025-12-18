@@ -1,0 +1,16 @@
+[package]
+name = "sinter_web"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = "0.8"
+gloo-net = "0.6"
+sinter_core = { path = "../core" }
+wasm-bindgen = "0.2"
+sinter_theme_sdk = { path = "../theme_sdk" }
+sinter_themes = { path = "../themes" }

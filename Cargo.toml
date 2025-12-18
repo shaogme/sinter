@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "core",
+    "cli",
+    "web",
+    "theme_sdk",
+    "themes",
+]
+resolver = "2"

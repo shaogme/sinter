@@ -1,0 +1,15 @@
+[[theme]]
+name = "default"
+path = "packages/theme_default"
+pre_build_cmd = "npm install"
+build_cmd = "npm run build"
+css_path = "style"
+files = ["default.css", "output.css", "aurora.css"]
+
+[[theme]]
+name = "default_light"
+path = "packages/theme_default_light"
+pre_build_cmd = "npm install"
+build_cmd = "npm run build"
+css_path = "style"
+files = ["default.css", "output.css", "aurora.css"]
