@@ -10,7 +10,13 @@
             var theme = 'default';
             try {
                 var stored = localStorage.getItem('sinter_theme');
-                if (stored) theme = stored;
+                if (stored) {
+                    try {
+                        theme = JSON.parse(stored);
+                    } catch (e) {
+                        theme = stored;
+                    }
+                }
             } catch (e) { }
             document.write('<link id="theme-css" rel="stylesheet" href="/themes/' + theme + '/default.css" />');
         })();
