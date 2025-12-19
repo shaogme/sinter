@@ -5,14 +5,10 @@ mod pages;
 use app::App;
 use leptos::mount::mount_to_body;
 
-#[cfg(target_arch = "wasm32")]
-use lol_alloc::{AssumeSingleThreaded, FreeListAllocator};
+use lite_alloc::single_threaded::FreeListAllocator;
 
-// SAFETY: This application is single threaded, so using AssumeSingleThreaded is allowed.
 #[global_allocator]
-#[cfg(target_arch = "wasm32")]
-static ALLOCATOR: AssumeSingleThreaded<FreeListAllocator> =
-    unsafe { AssumeSingleThreaded::new(FreeListAllocator::new()) };
+static ALLOCATOR: FreeListAllocator = FreeListAllocator::new();
 
 #[cfg(debug_assertions)]
 use std::panic;
