@@ -4,11 +4,12 @@ use gray_matter::{Matter, ParsedEntity, Pod};
 use pulldown_cmark::{Options, Parser};
 use rayon::prelude::*;
 use serde::Deserialize;
-use sinter_core::{Post, PostMetadata, SiteData};
+use sinter_core::constants::{DEFAULT_POSTS_PER_PAGE, PAGES_DIR, SITE_DATA_FILENAME};
+use sinter_core::{PageData, Post, PostMetadata, SiteMetaData, SitePostMetadata};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
-use tracing::{error, info, warn};
+use std::path::{Path, PathBuf};
+use tracing::{error, info};
 use walkdir::WalkDir;
 
 #[derive(Debug, Deserialize)]
@@ -16,51 +17,42 @@ struct SiteConfig {
     pub title: String,
     pub subtitle: String,
     pub description: String,
+    pub posts_per_page: Option<usize>,
 }
 
 pub fn compile(input_dir: &Path, output_dir: &Path, config_path: &Path) -> Result<()> {
-    info!("Scanning directory: {:?}", input_dir);
+    info!("Starting compilation...");
+    info!("Input directory: {:?}", input_dir);
 
-    // Load config
+    // 1. Initialization
     let config = load_config(config_path)?;
-    info!("Loaded configuration: {:?}", config);
+    info!("Configuration loaded: {:?}", config);
+    let posts_per_page = config.posts_per_page.unwrap_or(DEFAULT_POSTS_PER_PAGE);
 
-    // 1. Load and parse posts
-    let posts_with_path = load_posts(input_dir);
-    info!("Successfully processed {} posts.", posts_with_path.len());
+    let temp_dir = tempfile::Builder::new()
+        .prefix("sinter_build")
+        .tempdir()
+        .context("Failed to create temporary directory")?;
+    let temp_path = temp_dir.path();
+    info!("Temporary directory created at: {:?}", temp_path);
 
-    // 2. Write individual post JSON files
-    for (post, path) in &posts_with_path {
-        let target_path = output_dir.join(path);
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create parent dirs for post")?;
-        }
+    // 2. Process Posts
+    let mut posts = load_all_posts(input_dir);
+    posts.sort_by(|a, b| b.0.metadata.date.cmp(&a.0.metadata.date));
+    info!("Processed {} posts.", posts.len());
 
-        let json = serde_json::to_string(post).context("Failed to serialize post")?;
-        fs::write(&target_path, json).context("Failed to write post json")?;
-    }
-    info!(
-        "Written {} individual post JSON files.",
-        posts_with_path.len()
-    );
+    // 3. Generation
+    write_post_files(&posts, temp_path)?;
+    generate_pages(&posts, temp_path, posts_per_page)?;
+    write_site_metadata(posts.len(), &config, posts_per_page, temp_path)?;
 
-    // 3. Build site data (metadata only)
-    let site_data = build_site_data(&posts_with_path, config);
+    // 4. Deployment
+    deploy_to_output(temp_path, output_dir)?;
 
-    // 4. Write site data
-    if !output_dir.exists() {
-        fs::create_dir_all(output_dir).context("Failed to create output directory")?;
-    }
-
-    let output_path = output_dir.join("site_data.json");
-    let json = serde_json::to_string(&site_data).context("Failed to serialize site data")?;
-
-    fs::write(&output_path, json).context("Failed to write site_data.json")?;
-
-    info!("Compilation complete. Data written to {:?}", output_path);
-
+    info!("Compilation finished successfully!");
     Ok(())
 }
+
 fn load_config(path: &Path) -> Result<SiteConfig> {
     if !path.exists() {
         anyhow::bail!("Config file not found: {:?}", path);
@@ -74,7 +66,7 @@ fn load_config(path: &Path) -> Result<SiteConfig> {
     Ok(config)
 }
 
-fn load_posts(input_dir: &Path) -> Vec<(Post, String)> {
+fn load_all_posts(input_dir: &Path) -> Vec<(Post, String)> {
     let entries: Vec<_> = WalkDir::new(input_dir)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -89,7 +81,8 @@ fn load_posts(input_dir: &Path) -> Vec<(Post, String)> {
             let path = entry.path();
             let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
 
-            let mut dest_rel_path = std::path::PathBuf::from("posts");
+            // Construct the destination path for the JSON file
+            let mut dest_rel_path = PathBuf::from("posts");
             dest_rel_path.push(relative_path);
             dest_rel_path.set_extension("json");
 
@@ -142,44 +135,131 @@ fn parse_post(content: &str) -> Result<Post> {
     })
 }
 
-mod markdown_parser;
-
-fn build_site_data(posts: &[(Post, String)], config: SiteConfig) -> SiteData {
-    let mut posts_map = HashMap::new();
-    let mut tags_index = HashMap::new();
-
-    for (post, path) in posts {
-        for tag in &post.metadata.tags {
-            tags_index
-                .entry(tag.clone())
-                .or_insert_with(Vec::new)
-                .push(post.metadata.slug.clone());
+fn write_post_files(posts: &[(Post, String)], output_dir: &Path) -> Result<()> {
+    for (post, rel_path) in posts {
+        let target_path = output_dir.join(rel_path);
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent).context("Failed to create parent dirs for post")?;
         }
 
-        use sinter_core::SitePostMetadata;
+        let json = serde_json::to_string(post).context("Failed to serialize post")?;
+        fs::write(&target_path, json).context("Failed to write post json")?;
+    }
+    info!("Written {} individual post JSON files.", posts.len());
+    Ok(())
+}
 
-        let site_meta = SitePostMetadata {
-            metadata: post.metadata.clone(),
-            path: path.clone(),
+fn generate_pages(
+    posts: &[(Post, String)],
+    output_dir: &Path,
+    posts_per_page: usize,
+) -> Result<()> {
+    let pages_dir = output_dir.join(PAGES_DIR);
+    fs::create_dir_all(&pages_dir).context("Failed to create pages directory")?;
+
+    for (i, chunk) in posts.chunks(posts_per_page).enumerate() {
+        let page_num = i + 1;
+        let mut page_posts = Vec::new();
+        let mut tags_index = HashMap::new();
+
+        for (post, path) in chunk {
+            let site_meta = SitePostMetadata {
+                metadata: post.metadata.clone(),
+                path: path.clone(),
+            };
+            page_posts.push(site_meta);
+
+            for tag in &post.metadata.tags {
+                tags_index
+                    .entry(tag.clone())
+                    .or_insert_with(Vec::new)
+                    .push(post.metadata.slug.clone());
+            }
+        }
+
+        let page_data = PageData {
+            posts: page_posts,
+            tags_index,
         };
 
-        if let Some(existing) = posts_map.insert(post.metadata.slug.clone(), site_meta) {
-            warn!(
-                "Duplicate slug found: {}. Overwriting previous post via {:?}.",
-                existing.metadata.slug, existing.metadata.title
-            );
-        }
+        let page_json =
+            serde_json::to_string(&page_data).context("Failed to serialize page data")?;
+        fs::write(pages_dir.join(format!("page_{}.json", page_num)), page_json)
+            .context("Failed to write page json")?;
     }
 
-    SiteData {
-        generated_at: chrono::Utc::now(),
-        posts: posts_map,
-        tags_index,
-        title: config.title,
-        subtitle: config.subtitle,
-        description: config.description,
-    }
+    let total_pages = (posts.len() + posts_per_page - 1) / posts_per_page;
+    info!("Generated {} pages in {:?}", total_pages, pages_dir);
+
+    Ok(())
 }
+
+fn write_site_metadata(
+    total_posts: usize,
+    config: &SiteConfig,
+    posts_per_page: usize,
+    output_dir: &Path,
+) -> Result<()> {
+    let total_pages = if total_posts == 0 {
+        0
+    } else {
+        (total_posts + posts_per_page - 1) / posts_per_page
+    };
+
+    let site_meta = SiteMetaData {
+        generated_at: chrono::Utc::now(),
+        title: config.title.clone(),
+        subtitle: config.subtitle.clone(),
+        description: config.description.clone(),
+        total_pages,
+    };
+
+    let output_path = output_dir.join(SITE_DATA_FILENAME);
+    let json = serde_json::to_string(&site_meta).context("Failed to serialize site metadata")?;
+    fs::write(&output_path, json).context("Failed to write site metadata file")?;
+
+    info!("Site metadata written to {:?}", output_path);
+    Ok(())
+}
+
+fn deploy_to_output(temp_path: &Path, output_dir: &Path) -> Result<()> {
+    if !output_dir.exists() {
+        fs::create_dir_all(output_dir).context("Failed to create final output directory")?;
+    }
+
+    // Helper for recursive copy
+    fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
+        for entry in WalkDir::new(src) {
+            let entry = entry?;
+            let path = entry.path();
+            if path == src {
+                continue;
+            }
+
+            let rel_path = path.strip_prefix(src)?;
+            let target = dst.join(rel_path);
+
+            if path.is_dir() {
+                fs::create_dir_all(&target)?;
+            } else {
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(path, &target)?;
+            }
+        }
+        Ok(())
+    }
+
+    copy_recursive(temp_path, output_dir)?;
+    info!(
+        "Content deployed from temporary directory to {:?}",
+        output_dir
+    );
+    Ok(())
+}
+
+mod markdown_parser;
 
 #[cfg(test)]
 mod tests {

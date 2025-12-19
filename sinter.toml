@@ -1,3 +1,5 @@
 title = "ShaoG"
 subtitle = "韶光的博客"
 description = "分享一些经验、心得"
+posts_per_page = 10
+

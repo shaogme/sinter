@@ -1,12 +1,12 @@
 use leptos::prelude::*;
-use sinter_core::{ContentNode, Post, SiteData, SitePostMetadata};
+use sinter_core::{ContentNode, Post, SiteMetaData};
 use sinter_theme_sdk::Theme;
 
 #[derive(Clone, Debug)]
 pub struct DefaultLightTheme;
 
 impl Theme for DefaultLightTheme {
-    fn render_layout(&self, children: Children, site_data: Signal<Option<SiteData>>) -> AnyView {
+    fn render_layout(&self, children: Children, site_data: Signal<Option<SiteMetaData>>) -> AnyView {
         let site_title = move || site_data.get().map(|d| d.title).unwrap_or_else(|| "Sinter".to_string());
 
         view! {
@@ -130,106 +130,157 @@ impl Theme for DefaultLightTheme {
         }.into_any()
     }
 
-    fn render_home(&self, posts: Vec<SitePostMetadata>, site_data: &SiteData) -> AnyView {
-        // 移植 styles.css
+    fn render_home(&self) -> AnyView {
+        // Use hooks to access data
+        let site_meta_r = sinter_theme_sdk::use_site_meta();
+        let page_data_r = sinter_theme_sdk::use_page_data();
+        let current_page_s = sinter_theme_sdk::use_current_page();
 
+        let theme = self.clone();
+        let theme_fallback = theme.clone();
 
-        view! {
-            <div class="flex flex-col w-full">
+         view! {
+            <Suspense fallback=move || theme_fallback.render_loading()>
+                {move || {
+                    let site_meta_res = site_meta_r.clone().and_then(|r| r.ok());
+                    let page_data_res = page_data_r.clone().and_then(|r| r.get().and_then(|res| res.ok()));
 
+                    match (site_meta_res, page_data_res) {
+                        (Some(site_meta), Some(page_data)) => {
+                            let posts = page_data.posts;
+                            let title = site_meta.title.clone();
+                            let subtitle = site_meta.subtitle.clone();
+                            let description = site_meta.description.clone();
+                            let total_pages = site_meta.total_pages;
 
-                // Hero Section
-                <div class="hero min-h-screen relative">
-                    <div class="hero-content text-center text-slate-900 z-10 w-full">
-                        <div class="w-full max-w-7xl mx-auto flex flex-col items-center animate-fade-in-up">
-                            
-                            // --- Liquid Glass Component ---
-                            <div class="mb-12">
-                                <div class="liquidGlass-wrapper">
-                                    <div class="liquidGlass-effect"></div>
-                                    <div class="liquidGlass-tint"></div>
-                                    <div class="liquidGlass-shine"></div>
-                                    
-                                    <div class="liquidGlass-text">
-                                        <h1 class="text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter leading-none">
-                                            {site_data.title.clone()}
-                                        </h1>
+                            let search = current_page_s.get();
+
+                            view! {
+                                <div class="flex flex-col w-full">
+                                    // Hero Section
+                                    <div class="hero min-h-screen relative">
+                                        <div class="hero-content text-center text-slate-900 z-10 w-full">
+                                            <div class="w-full max-w-7xl mx-auto flex flex-col items-center animate-fade-in-up">
+                                                
+                                                // --- Liquid Glass Component ---
+                                                <div class="mb-12">
+                                                    <div class="liquidGlass-wrapper">
+                                                        <div class="liquidGlass-effect"></div>
+                                                        <div class="liquidGlass-tint"></div>
+                                                        <div class="liquidGlass-shine"></div>
+                                                        
+                                                        <div class="liquidGlass-text">
+                                                            <h1 class="text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter leading-none">
+                                                                {title}
+                                                            </h1>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                // ------------------------------
+
+                                                <div class="text-center text-slate-800 space-y-6 max-w-2xl mx-auto px-4">
+                                                    <h2 class="text-2xl md:text-4xl font-bold opacity-90 drop-shadow-sm">
+                                                        {subtitle}
+                                                    </h2>
+                                                    <p class="text-lg md:text-2xl font-medium opacity-80">
+                                                        {description}
+                                                    </p>
+                                                </div>
+
+                                                // Bounce arrow
+                                                <div class="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
+                                                    <svg class="h-10 w-10 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    // Posts Grid
+                                    <div class="py-20 px-4 min-h-[50vh]">
+                                        <div class="container mx-auto max-w-5xl space-y-12">
+                                            <For
+                                                each=move || posts.clone()
+                                                key=|post| post.metadata.id.clone()
+                                                children=|post| view! {
+                                                    <article class="relative group overflow-hidden rounded-2xl transition-all duration-500 hover:-translate-y-2">
+                                                        // Glass Background Layer
+                                                        <div class="absolute inset-0 bg-white/60 backdrop-blur-md border border-white/50 transition-colors duration-300 group-hover:bg-white/80 shadow-lg"></div>
+                                                        
+                                                        // Content
+                                                        <div class="relative p-8 sm:p-10 text-center z-10">
+                                                            <a href=format!("/posts/{}", post.metadata.slug) class="block group-hover:text-primary transition-colors">
+                                                                <h2 class="text-3xl font-bold mb-4 text-slate-900 tracking-tight group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-blue-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
+                                                                    {post.metadata.title.clone()}
+                                                                </h2>
+                                                            </a>
+                                                            
+                                                            <div class="flex flex-wrap justify-center gap-4 text-sm text-slate-600 mb-6 uppercase tracking-wider font-medium">
+                                                                <div class="flex items-center gap-1">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" opacity="0.7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                    <span>{post.metadata.date.format("%Y/%m/%d").to_string()}</span>
+                                                                </div>
+                                                                <div class="hidden sm:block opacity-50">"•"</div>
+                                                                <div class="flex items-center gap-2">
+                                                                    {post.metadata.tags.iter().map(|tag: &String| view! {
+                                                                        <span class="px-2 py-0.5 rounded-full bg-slate-200/50 text-slate-700 border border-slate-200">{tag.clone()}</span>
+                                                                    }).collect::<Vec<_>>()}
+                                                                </div>
+                                                            </div>
+
+                                                            <p class="text-slate-700 leading-relaxed mb-8 line-clamp-3 max-w-2xl mx-auto">
+                                                                {post.metadata.summary.clone()}
+                                                            </p>
+
+                                                            <div class="flex justify-center">
+                                                                <a href=format!("/posts/{}", post.metadata.slug) class="group/btn relative px-8 py-2 overflow-hidden rounded-full bg-slate-900/5 text-slate-900 transition-all duration-300 hover:bg-slate-900/10 hover:scale-105 hover:shadow-lg border border-slate-900/10">
+                                                                    <span class="relative z-10 font-medium">"Read Article"</span>
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </article>
+                                                }
+                                            />
+
+                                             // Pagination Controls
+                                            <div class="flex justify-center items-center gap-4 mt-16 text-slate-700">
+                                                {if search > 1 {
+                                                    view! {
+                                                        <a href=format!("/?page={}", search - 1) class="btn btn-circle btn-ghost border-slate-200 hover:bg-slate-100">
+                                                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                                                        </a>
+                                                    }.into_any()
+                                                } else {
+                                                    view! { <button class="btn btn-circle btn-disabled btn-ghost opacity-20"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button> }.into_any()
+                                                }}
+                                                
+                                                <span class="font-mono opacity-80">{format!("Page {} of {}", search, total_pages)}</span>
+
+                                                {if search < total_pages {
+                                                    view! {
+                                                        <a href=format!("/?page={}", search + 1) class="btn btn-circle btn-ghost border-slate-200 hover:bg-slate-100">
+                                                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                                                        </a>
+                                                    }.into_any()
+                                                } else {
+                                                    view! { <button class="btn btn-circle btn-disabled btn-ghost opacity-20"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button> }.into_any()
+                                                }}
+                                            </div>
+
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            // ------------------------------
-
-                            <div class="text-center text-slate-800 space-y-6 max-w-2xl mx-auto px-4">
-                                <h2 class="text-2xl md:text-4xl font-bold opacity-90 drop-shadow-sm">
-                                    {site_data.subtitle.clone()}
-                                </h2>
-                                <p class="text-lg md:text-2xl font-medium opacity-80">
-                                    {site_data.description.clone()}
-                                </p>
-                            </div>
-
-                            <div class="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
-                                <svg class="h-10 w-10 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                // Posts Grid
-                <div class="py-20 px-4 min-h-[50vh]">
-                    <div class="container mx-auto max-w-5xl space-y-12">
-                        <For
-                            each=move || posts.clone()
-                            key=|post| post.metadata.id.clone()
-                            children=|post| view! {
-                                <article class="relative group overflow-hidden rounded-2xl transition-all duration-500 hover:-translate-y-2">
-                                    // Glass Background Layer
-                                    <div class="absolute inset-0 bg-white/60 backdrop-blur-md border border-white/50 transition-colors duration-300 group-hover:bg-white/80 shadow-lg"></div>
-                                    
-                                    // Content
-                                    <div class="relative p-8 sm:p-10 text-center z-10">
-                                        <a href=format!("/posts/{}", post.metadata.slug) class="block group-hover:text-primary transition-colors">
-                                            <h2 class="text-3xl font-bold mb-4 text-slate-900 tracking-tight group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-blue-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
-                                                {post.metadata.title.clone()}
-                                            </h2>
-                                        </a>
-                                        
-                                        <div class="flex flex-wrap justify-center gap-4 text-sm text-slate-600 mb-6 uppercase tracking-wider font-medium">
-                                            <div class="flex items-center gap-1">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" opacity="0.7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                <span>{post.metadata.date.format("%Y/%m/%d").to_string()}</span>
-                                            </div>
-                                            <div class="hidden sm:block opacity-50">"•"</div>
-                                            <div class="flex items-center gap-2">
-                                                {post.metadata.tags.iter().map(|tag| view! {
-                                                    <span class="px-2 py-0.5 rounded-full bg-slate-200/50 text-slate-700 border border-slate-200">{tag.clone()}</span>
-                                                }).collect::<Vec<_>>()}
-                                            </div>
-                                        </div>
-
-                                        <p class="text-slate-700 leading-relaxed mb-8 line-clamp-3 max-w-2xl mx-auto">
-                                            {post.metadata.summary.clone()}
-                                        </p>
-
-                                        <div class="flex justify-center">
-                                            <a href=format!("/posts/{}", post.metadata.slug) class="group/btn relative px-8 py-2 overflow-hidden rounded-full bg-slate-900/5 text-slate-900 transition-all duration-300 hover:bg-slate-900/10 hover:scale-105 hover:shadow-lg border border-slate-900/10">
-                                                <span class="relative z-10 font-medium">"Read Article"</span>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </article>
-                            }
-                        />
-                    </div>
-                </div>
-            </div>
+                            }.into_any()
+                        },
+                        _ => theme.render_loading() 
+                    }
+                }}
+            </Suspense>
         }.into_any()
-    }
-    
+    }    
     fn render_post(&self, post: Post) -> AnyView {
         view! {
             <div class="pt-24 lg:pt-32 pb-20 px-4">

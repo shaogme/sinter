@@ -142,14 +142,26 @@ pub struct Post {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SiteData {
+pub struct SiteMetaData {
     pub generated_at: DateTime<Utc>,
-    pub posts: HashMap<String, SitePostMetadata>,
-    pub tags_index: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub subtitle: String,
     #[serde(default)]
     pub description: String,
+    pub total_pages: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PageData {
+    pub posts: Vec<SitePostMetadata>,
+    pub tags_index: HashMap<String, Vec<String>>,
+}
+
+pub mod constants {
+    pub const DEFAULT_POSTS_PER_PAGE: usize = 10;
+    pub const SITE_DATA_FILENAME: &str = "site_data.json";
+    pub const PAGES_DIR: &str = "pages";
+    pub const POSTS_DIR: &str = "posts";
 }
