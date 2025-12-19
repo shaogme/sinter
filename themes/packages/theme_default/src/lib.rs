@@ -217,7 +217,7 @@ impl Theme for DefaultTheme {
                                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" opacity="0.7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                                     </svg>
-                                                                    <span>{post.metadata.date.format("%Y/%m/%d").to_string()}</span>
+                                                                    <span>{format_date_slash(&post.metadata.date)}</span>
                                                                 </div>
                                                                 <div class="hidden sm:block opacity-50">"•"</div>
                                                             <div class="flex items-center gap-2">
@@ -366,7 +366,7 @@ impl Theme for DefaultTheme {
                                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" opacity="0.7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                                     </svg>
-                                                                    <span>{post.metadata.date.format("%Y/%m/%d").to_string()}</span>
+                                                                    <span>{format_date_slash(&post.metadata.date)}</span>
                                                                 </div>
                                                                 <div class="hidden sm:block opacity-50">"•"</div>
                                                             <div class="flex items-center gap-2">
@@ -445,7 +445,7 @@ impl Theme for DefaultTheme {
 
                             <div class="flex flex-wrap items-center justify-center gap-4 text-sm font-medium text-gray-300">
                                 <time class="px-4 py-1.5 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm">
-                                    {post.metadata.date.format("%B %d, %Y").to_string()}
+                                    {format_date_long(&post.metadata.date)}
                                 </time>
                                 <div class="flex gap-2">
                                     {post.metadata.tags.iter().map(|tag| view! {
@@ -612,4 +612,18 @@ fn NodeRenderer(node: ContentNode) -> impl IntoView {
         ContentNode::TableRow { children } => view! { <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">{children.into_iter().map(|c| view! { <NodeRenderer node=c /> }).collect_view()}</tr> }.into_any(),
         ContentNode::TableCell { children } => view! { <td class="px-6 py-4 whitespace-pre-wrap">{children.into_iter().map(|c| view! { <NodeRenderer node=c /> }).collect_view()}</td> }.into_any(),
     }
+}
+
+fn format_date_slash(date: &sinter_core::LiteDate) -> String {
+    format!("{}/{:02}/{:02}", date.year, date.month, date.day)
+}
+
+fn format_date_long(date: &sinter_core::LiteDate) -> String {
+    let month = match date.month {
+        1 => "January", 2 => "February", 3 => "March", 4 => "April",
+        5 => "May", 6 => "June", 7 => "July", 8 => "August",
+        9 => "September", 10 => "October", 11 => "November", 12 => "December",
+        _ => "",
+    };
+    format!("{} {}, {}", month, date.day, date.year)
 }

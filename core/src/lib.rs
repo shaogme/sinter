@@ -1,27 +1,44 @@
-use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt;
 
-pub mod date_format {
-    use chrono::NaiveDate;
-    use serde::{self, Deserialize, Deserializer, Serializer};
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiteDate {
+    pub year: i32,
+    pub month: u8,
+    pub day: u8,
+}
 
-    const FORMAT: &str = "%Y-%m-%d";
+impl fmt::Display for LiteDate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
+    }
+}
 
-    pub fn serialize<S>(date: &NaiveDate, serializer: S) -> Result<S::Ok, S::Error>
+impl Serialize for LiteDate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let s = format!("{}", date.format(FORMAT));
-        serializer.serialize_str(&s)
+        serializer.serialize_str(&self.to_string())
     }
+}
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
+impl<'de> Deserialize<'de> for LiteDate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        NaiveDate::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() != 3 {
+            return Err(serde::de::Error::custom("Expected format YYYY-MM-DD"));
+        }
+        let year = parts[0].parse().map_err(serde::de::Error::custom)?;
+        let month = parts[1].parse().map_err(serde::de::Error::custom)?;
+        let day = parts[2].parse().map_err(serde::de::Error::custom)?;
+
+        Ok(LiteDate { year, month, day })
     }
 }
 
@@ -31,8 +48,7 @@ pub struct PostMetadata {
     pub title: String,
     pub slug: String,
 
-    #[serde(with = "date_format")]
-    pub date: NaiveDate,
+    pub date: LiteDate,
 
     #[serde(default)]
     pub tags: Vec<String>,
@@ -143,7 +159,7 @@ pub struct Post {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SiteMetaData {
-    pub generated_at: DateTime<Utc>,
+    pub generated_at: String, // ISO String or similar
     #[serde(default)]
     pub title: String,
     #[serde(default)]

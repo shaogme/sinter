@@ -54,7 +54,11 @@ pub fn compile(
 
     // 2. Process Posts
     let mut posts = load_posts_from_dir(posts_dir, "posts");
-    posts.sort_by(|a, b| b.0.metadata.date.cmp(&a.0.metadata.date));
+    posts.sort_by(|a, b| {
+        let date_a = &a.0.metadata.date;
+        let date_b = &b.0.metadata.date;
+        (date_b.year, date_b.month, date_b.day).cmp(&(date_a.year, date_a.month, date_a.day))
+    });
     info!("Processed {} posts.", posts.len());
 
     // 3. Process Archives
@@ -67,7 +71,11 @@ pub fn compile(
         );
         Vec::new()
     };
-    archives.sort_by(|a, b| b.0.metadata.date.cmp(&a.0.metadata.date));
+    archives.sort_by(|a, b| {
+        let date_a = &a.0.metadata.date;
+        let date_b = &b.0.metadata.date;
+        (date_b.year, date_b.month, date_b.day).cmp(&(date_a.year, date_a.month, date_a.day))
+    });
     info!("Processed {} archives.", archives.len());
 
     // 4. Generation
@@ -247,7 +255,7 @@ fn write_site_metadata(
     };
 
     let site_meta = SiteMetaData {
-        generated_at: chrono::Utc::now(),
+        generated_at: chrono::Local::now().to_rfc3339(),
         title: config.site.title.clone(),
         subtitle: config.site.subtitle.clone(),
         description: config.site.description.clone(),

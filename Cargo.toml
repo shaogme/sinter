@@ -7,3 +7,10 @@ members = [
     "themes",
 ]
 resolver = "2"
+
+[profile.release]
+opt-level = "z"   # 甚至不是 "s"，而是 "z" (极致压缩)
+lto = true        # 激进的链接时优化
+codegen-units = 1 # 禁止并行生成，为了更好的去重
+panic = "abort"   # 移除 panic 时的栈展开逻辑
+strip = true      # 移除所有符号

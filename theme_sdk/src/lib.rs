@@ -1,11 +1,36 @@
-use gloo_net::http::Request;
-use gloo_storage::Storage;
 use leptos::prelude::*;
 use sinter_core::{PageData, Post, SiteMetaData};
 use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlLinkElement, window};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{HtmlLinkElement, Response, window};
+
+// Helper for fetching JSON
+async fn fetch_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
+    let window = window().ok_or("No global window")?;
+    let resp_value = JsFuture::from(window.fetch_with_str(url))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+    let resp: Response = resp_value
+        .dyn_into()
+        .map_err(|_| "Response is not a Response object".to_string())?;
+
+    if !resp.ok() {
+        return Err(format!(
+            "Failed to fetch {}: {} {}",
+            url,
+            resp.status(),
+            resp.status_text()
+        ));
+    }
+
+    let json_value = JsFuture::from(resp.json().map_err(|e| format!("json error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("json await error: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json_value).map_err(|e| format!("Deserialization error: {}", e))
+}
 
 pub trait Theme: Send + Sync + std::fmt::Debug {
     fn render_home(&self) -> AnyView;
@@ -62,31 +87,30 @@ impl ThemeManager {
         new_link.set_rel("stylesheet");
         new_link.set_href(&url);
 
-        // Prepare async channel to wait for load
-        let (tx, rx) = futures::channel::oneshot::channel();
-        // Wrap tx in RefCell to use in FnMut (even though it's called once)
-        let tx = std::cell::RefCell::new(Some(tx));
-
-        // Setup onload handler to swap links
-        let doc_clone = document.clone();
+        // Prepare promise to wait for load
         let new_link_clone = new_link.clone();
+        let doc_clone = document.clone();
 
-        let callback = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-            // Find and remove old link
-            let old_link = doc_clone.get_element_by_id("theme-css");
-            if let Some(old) = old_link {
-                old.remove();
-            }
-            // Adopt the ID for the new link
-            new_link_clone.set_id("theme-css");
+        let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+            let new_link_inner = new_link_clone.clone();
+            let doc_inner = doc_clone.clone();
 
-            // Notify completion
-            if let Some(sender) = tx.borrow_mut().take() {
-                let _ = sender.send(());
-            }
+            let callback = wasm_bindgen::closure::Closure::once(move || {
+                // Find and remove old link
+                let old_link = doc_inner.get_element_by_id("theme-css");
+                if let Some(old) = old_link {
+                    old.remove();
+                }
+                // Adopt the ID for the new link
+                new_link_inner.set_id("theme-css");
+
+                // Notify completion
+                let _ = resolve.call0(&wasm_bindgen::JsValue::NULL);
+            });
+
+            new_link_clone.set_onload(Some(callback.as_ref().unchecked_ref()));
+            callback.forget();
         });
-
-        new_link.set_onload(Some(callback.as_ref().unchecked_ref()));
 
         if let Err(e) = head.append_child(&new_link) {
             leptos::logging::error!("Failed to append child: {:?}", e);
@@ -94,8 +118,7 @@ impl ThemeManager {
         }
 
         // Wait for CSS to load
-        // The callback is held by `callback` variable, which lives until this await finishes
-        let _ = rx.await;
+        let _ = JsFuture::from(promise).await;
 
         // 3. Return the theme so the app can update its state
         Some(theme)
@@ -103,56 +126,15 @@ impl ThemeManager {
 }
 
 pub async fn fetch_site_meta() -> Result<SiteMetaData, String> {
-    let resp = Request::get("/sinter_data/site_data.json")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !resp.ok() {
-        return Err(format!(
-            "Failed to fetch site data: {} {}",
-            resp.status(),
-            resp.status_text()
-        ));
-    }
-
-    resp.json::<SiteMetaData>()
-        .await
-        .map_err(|e| format!("JSON Parse Error: {}", e))
+    fetch_json("/sinter_data/site_data.json").await
 }
 
 pub async fn fetch_page_data(page: usize) -> Result<PageData, String> {
-    let url = format!("/sinter_data/pages/page_{}.json", page);
-    let resp = Request::get(&url).send().await.map_err(|e| e.to_string())?;
-
-    if !resp.ok() {
-        return Err(format!(
-            "Failed to fetch page data: {} {}",
-            resp.status(),
-            resp.status_text()
-        ));
-    }
-
-    resp.json::<PageData>()
-        .await
-        .map_err(|e| format!("JSON Parse Error: {}", e))
+    fetch_json(&format!("/sinter_data/pages/page_{}.json", page)).await
 }
 
 pub async fn fetch_archive_page_data(page: usize) -> Result<PageData, String> {
-    let url = format!("/sinter_data/archives/pages/page_{}.json", page);
-    let resp = Request::get(&url).send().await.map_err(|e| e.to_string())?;
-
-    if !resp.ok() {
-        return Err(format!(
-            "Failed to fetch archive page data: {} {}",
-            resp.status(),
-            resp.status_text()
-        ));
-    }
-
-    resp.json::<PageData>()
-        .await
-        .map_err(|e| format!("JSON Parse Error: {}", e))
+    fetch_json(&format!("/sinter_data/archives/pages/page_{}.json", page)).await
 }
 
 #[derive(Clone)]
@@ -165,7 +147,11 @@ pub struct GlobalState {
 impl GlobalState {
     pub fn new(manager: Arc<ThemeManager>, initial_theme_name: &str) -> Self {
         // Try to get theme from local storage
-        let storage_theme: Option<String> = gloo_storage::LocalStorage::get("sinter_theme").ok();
+        let storage = window().and_then(|w| w.local_storage().ok()).flatten();
+        let storage_theme = storage
+            .as_ref()
+            .and_then(|s| s.get_item("sinter_theme").ok())
+            .flatten();
         let theme_name = storage_theme.as_deref().unwrap_or(initial_theme_name);
 
         let theme_instance = manager
@@ -188,7 +174,9 @@ impl GlobalState {
         leptos::task::spawn_local(async move {
             if let Some(new_theme) = manager.switch_theme(&name_owned).await {
                 theme_signal.set(new_theme);
-                let _ = gloo_storage::LocalStorage::set("sinter_theme", &name_owned);
+                if let Some(storage) = window().and_then(|w| w.local_storage().ok()).flatten() {
+                    let _ = storage.set_item("sinter_theme", &name_owned);
+                }
             } else {
                 leptos::logging::warn!("Theme '{}' not found", &name_owned);
             }
