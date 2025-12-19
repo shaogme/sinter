@@ -14,9 +14,19 @@ use walkdir::WalkDir;
 
 #[derive(Debug, Deserialize)]
 struct SiteConfig {
+    pub site: SiteSection,
+    pub home: HomeSection,
+}
+
+#[derive(Debug, Deserialize)]
+struct SiteSection {
     pub title: String,
     pub subtitle: String,
     pub description: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct HomeSection {
     pub posts_per_page: Option<usize>,
 }
 
@@ -27,7 +37,7 @@ pub fn compile(input_dir: &Path, output_dir: &Path, config_path: &Path) -> Resul
     // 1. Initialization
     let config = load_config(config_path)?;
     info!("Configuration loaded: {:?}", config);
-    let posts_per_page = config.posts_per_page.unwrap_or(DEFAULT_POSTS_PER_PAGE);
+    let posts_per_page = config.home.posts_per_page.unwrap_or(DEFAULT_POSTS_PER_PAGE);
 
     let temp_dir = tempfile::Builder::new()
         .prefix("sinter_build")
@@ -208,9 +218,9 @@ fn write_site_metadata(
 
     let site_meta = SiteMetaData {
         generated_at: chrono::Utc::now(),
-        title: config.title.clone(),
-        subtitle: config.subtitle.clone(),
-        description: config.description.clone(),
+        title: config.site.title.clone(),
+        subtitle: config.site.subtitle.clone(),
+        description: config.site.description.clone(),
         total_pages,
     };
 
