@@ -1,10 +1,9 @@
 use crate::app::PostParams;
 
-use gloo_net::http::Request;
 use leptos::prelude::*;
 use leptos_router::hooks::{use_params, use_query_map};
 use sinter_core::Post;
-use sinter_theme_sdk::{PageDataContext, fetch_archive_page_data, fetch_page_data};
+use sinter_theme_sdk::{PageDataContext, fetch_archive_page_data, fetch_json, fetch_page_data};
 
 #[component]
 pub fn Home() -> impl IntoView {
@@ -82,14 +81,8 @@ pub fn PostView() -> impl IntoView {
             // 直接构建 URL 请求文章数据
             let url = format!("/sinter_data/posts/{}.json", slug);
 
-            match Request::get(&url).send().await {
-                Ok(resp) => {
-                    if resp.ok() {
-                        resp.json::<Post>().await.ok()
-                    } else {
-                        None
-                    }
-                }
+            match fetch_json::<Post>(&url).await {
+                Ok(post) => Some(post),
                 Err(_) => None,
             }
         }
@@ -126,14 +119,8 @@ pub fn ArchivePostView() -> impl IntoView {
         async move {
             let url = format!("/sinter_data/archives/{}.json", slug);
 
-            match Request::get(&url).send().await {
-                Ok(resp) => {
-                    if resp.ok() {
-                        resp.json::<Post>().await.ok()
-                    } else {
-                        None
-                    }
-                }
+            match fetch_json::<Post>(&url).await {
+                Ok(post) => Some(post),
                 Err(_) => None,
             }
         }

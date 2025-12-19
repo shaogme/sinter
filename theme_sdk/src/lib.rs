@@ -7,7 +7,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{HtmlLinkElement, Response, window};
 
 // Helper for fetching JSON
-async fn fetch_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
+pub async fn fetch_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     let window = window().ok_or("No global window")?;
     let resp_value = JsFuture::from(window.fetch_with_str(url))
         .await
