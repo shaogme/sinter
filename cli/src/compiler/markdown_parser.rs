@@ -189,7 +189,7 @@ impl AstStateMachine {
                     ContentNode::Image { url, title, alt }
                 }
                 Some(FrameType::CodeBlock(lang)) => {
-                    let code = frame
+                    let code_text = frame
                         .children
                         .iter()
                         .map(|c| match c {
@@ -197,7 +197,7 @@ impl AstStateMachine {
                             _ => "",
                         })
                         .collect::<String>();
-                    ContentNode::CodeBlock { lang, code }
+                    ContentNode::CodeBlock { lang, code_text }
                 }
                 None => unreachable!("Root frame should not be popped via exit_node"),
             };

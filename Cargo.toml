@@ -5,6 +5,8 @@ members = [
     "web",
     "theme_sdk",
     "themes",
+    "sinter_ui",
+    "sinter_ui/examples/counter",
 ]
 resolver = "2"
 

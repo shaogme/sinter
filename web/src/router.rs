@@ -1,6 +1,6 @@
-use leptos::ev;
-use leptos::prelude::*;
+use sinter_ui::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 use web_sys::{HtmlAnchorElement, Url};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,34 +38,47 @@ impl Route {
     }
 }
 
-pub fn use_router() -> (Signal<Route>, Signal<usize>) {
-    let (path, set_path) = signal(
+pub fn use_router() -> (ReadSignal<Route>, ReadSignal<usize>) {
+    let (path, set_path) = create_signal(
         web_sys::window()
             .and_then(|w| w.location().pathname().ok())
             .unwrap_or_else(|| "/".to_string()),
     );
 
-    let (search, set_search) = signal(
+    let (search, set_search) = create_signal(
         web_sys::window()
             .and_then(|w| w.location().search().ok())
             .unwrap_or_default(),
     );
 
     // Sync UI on history change (PopState)
-    Effect::new(move |_| {
-        let handle = window_event_listener(ev::popstate, move |_| {
+    create_effect(move || {
+        let set_path = set_path;
+        let set_search = set_search;
+        let callback = Closure::wrap(Box::new(move |_| {
             if let Some(w) = web_sys::window() {
                 let loc = w.location();
-                set_path.set(loc.pathname().unwrap_or_default());
-                set_search.set(loc.search().unwrap_or_default());
+                let _ = set_path.set(loc.pathname().unwrap_or_default());
+                let _ = set_search.set(loc.search().unwrap_or_default());
             }
+        }) as Box<dyn FnMut(web_sys::Event)>);
+
+        let window = web_sys::window().unwrap();
+        let _ =
+            window.add_event_listener_with_callback("popstate", callback.as_ref().unchecked_ref());
+
+        on_cleanup(move || {
+            let _ = window
+                .remove_event_listener_with_callback("popstate", callback.as_ref().unchecked_ref());
         });
-        on_cleanup(move || handle.remove());
     });
 
     // Intercept <a> clicks for client-side routing
-    Effect::new(move |_| {
-        let handle = window_event_listener(ev::click, move |ev| {
+    create_effect(move || {
+        let set_path = set_path;
+        let set_search = set_search;
+
+        let callback = Closure::wrap(Box::new(move |ev: web_sys::Event| {
             let target = ev.target().unwrap();
             let anchor = if let Some(a) = target.dyn_ref::<HtmlAnchorElement>() {
                 Some(a.clone())
@@ -81,6 +94,7 @@ pub fn use_router() -> (Signal<Route>, Signal<usize>) {
             if let Some(a) = anchor {
                 let href = a.href();
                 if let Ok(url) = Url::new(&href) {
+                    // Check if it's the same origin
                     if let Ok(origin) = web_sys::window().unwrap().location().origin() {
                         if url.origin() == origin {
                             ev.prevent_default();
@@ -95,21 +109,28 @@ pub fn use_router() -> (Signal<Route>, Signal<usize>) {
                                 );
                             }
 
-                            set_path.set(pathname);
-                            set_search.set(search_str);
+                            let _ = set_path.set(pathname);
+                            let _ = set_search.set(search_str);
                             web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
                         }
                     }
                 }
             }
+        }) as Box<dyn FnMut(web_sys::Event)>);
+
+        let window = web_sys::window().unwrap();
+        let _ = window.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref());
+
+        on_cleanup(move || {
+            let _ = window
+                .remove_event_listener_with_callback("click", callback.as_ref().unchecked_ref());
         });
-        on_cleanup(move || handle.remove());
     });
 
-    let current_route = Signal::derive(move || Route::from_path(&path.get()));
+    let current_route = create_memo(move || Route::from_path(&path.get().unwrap_or_default()));
 
-    let current_page = Signal::derive(move || {
-        let s = search.get();
+    let current_page = create_memo(move || {
+        let s = search.get().unwrap_or_default();
         web_sys::UrlSearchParams::new_with_str(&s)
             .ok()
             .and_then(|p| p.get("page"))

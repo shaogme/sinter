@@ -1,17 +1,21 @@
-use leptos::prelude::*;
+use sinter_theme_sdk::{Children, GlobalState};
+use sinter_ui::dom::tag::*;
+use sinter_ui::dom::view::{AnyView, IntoAnyView};
+use sinter_ui::prelude::*;
 
-#[component]
-pub fn Layout(children: ChildrenFn) -> impl IntoView {
-    let state = use_context::<sinter_theme_sdk::GlobalState>().expect("GlobalState missing");
+pub fn layout(children: Children) -> AnyView {
+    if let Some(state) = use_context::<GlobalState>() {
+        // Use Dynamic to make the layout reactive to theme changes
+        Dynamic::new(move || {
+            let theme = state.theme.get().expect("Theme not found inside layout");
 
-    let site_meta_signal = Signal::derive(move || state.site_meta.get().and_then(|r| r.ok()));
+            let site_meta_signal = create_memo(move || state.site_meta.get().and_then(|r| r.ok()));
 
-    let children = StoredValue::new(children);
-
-    move || {
-        let current_theme = state.theme.get();
-        // create a fresh FnOnce closure that calls the stored Fn
-        let children_closure = Box::new(move || children.with_value(|c| c()));
-        current_theme.render_layout(children_closure, site_meta_signal)
+            let children_clone = children.clone();
+            theme.render_layout(children_clone, site_meta_signal)
+        })
+        .into_any()
+    } else {
+        Dynamic::new(|| div().text("GlobalState missing").into_any()).into_any()
     }
 }

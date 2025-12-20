@@ -3,8 +3,9 @@ mod components;
 mod pages;
 mod router;
 
-use app::App;
-use leptos::mount::mount_to_body;
+use crate::app::app;
+use sinter_ui::dom::view::{IntoAnyView, View};
+use sinter_ui::prelude::*;
 
 use lite_alloc::single_threaded::FreeListAllocator;
 
@@ -61,5 +62,14 @@ fn register() {
 pub fn run() {
     #[cfg(debug_assertions)]
     register();
-    mount_to_body(App);
+
+    // Create a scope to hold the application state
+    create_scope(move || {
+        let window = web_sys::window().expect("No global window");
+        let document = window.document().expect("No document");
+        let body = document.body().expect("No body");
+
+        let app_view = app();
+        app_view.into_any().mount(&body);
+    });
 }

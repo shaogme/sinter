@@ -1,5 +1,6 @@
-use leptos::prelude::*;
 use sinter_core::{PageData, Post, SiteMetaData};
+use sinter_ui::dom::view::AnyView;
+use sinter_ui::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
@@ -32,6 +33,8 @@ pub async fn fetch_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, 
     serde_wasm_bindgen::from_value(json_value).map_err(|e| format!("Deserialization error: {}", e))
 }
 
+pub type Children = Arc<dyn Fn() -> AnyView>;
+
 pub trait Theme: Send + Sync + std::fmt::Debug {
     fn render_home(&self) -> AnyView;
     fn render_archive(&self) -> AnyView;
@@ -40,8 +43,11 @@ pub trait Theme: Send + Sync + std::fmt::Debug {
     fn render_loading(&self) -> AnyView;
     fn render_post_not_found(&self) -> AnyView;
     fn render_error(&self, message: String) -> AnyView;
-    fn render_layout(&self, children: Children, site_meta: Signal<Option<SiteMetaData>>)
-    -> AnyView;
+    fn render_layout(
+        &self,
+        children: Children,
+        site_meta: ReadSignal<Option<SiteMetaData>>,
+    ) -> AnyView;
 }
 
 #[derive(Debug)]
@@ -77,7 +83,7 @@ impl ThemeManager {
         let head = document.head().expect("document should have a head");
 
         let url = format!("/themes/{}/default.css", name);
-        leptos::logging::log!("Switching theme CSS to: {}", url);
+        sinter_ui::log!("Switching theme CSS to: {}", url);
 
         // Create new link
         let new_link = document
@@ -113,7 +119,7 @@ impl ThemeManager {
         });
 
         if let Err(e) = head.append_child(&new_link) {
-            leptos::logging::error!("Failed to append child: {:?}", e);
+            sinter_ui::error!("Failed to append child: {:?}", e);
             return None;
         }
 
@@ -139,7 +145,7 @@ pub async fn fetch_archive_page_data(page: usize) -> Result<PageData, String> {
 
 #[derive(Clone)]
 pub struct GlobalState {
-    pub site_meta: LocalResource<Result<SiteMetaData, String>>,
+    pub site_meta: Resource<Result<SiteMetaData, String>>,
     pub theme: RwSignal<Arc<dyn Theme>>,
     pub manager: Arc<ThemeManager>,
 }
@@ -159,8 +165,11 @@ impl GlobalState {
             .or_else(|| manager.get_theme(initial_theme_name))
             .expect("Initial theme not found");
 
+        let site_meta_resource = create_resource(|| (), |_| async move { fetch_site_meta().await })
+            .expect("Failed to create resource");
+
         Self {
-            site_meta: LocalResource::new(fetch_site_meta),
+            site_meta: site_meta_resource,
             theme: RwSignal::new(theme_instance),
             manager,
         }
@@ -171,14 +180,14 @@ impl GlobalState {
         let theme_signal = self.theme;
         let name_owned = name.to_string();
 
-        leptos::task::spawn_local(async move {
+        wasm_bindgen_futures::spawn_local(async move {
             if let Some(new_theme) = manager.switch_theme(&name_owned).await {
-                theme_signal.set(new_theme);
+                let _ = theme_signal.set(new_theme);
                 if let Some(storage) = window().and_then(|w| w.local_storage().ok()).flatten() {
                     let _ = storage.set_item("sinter_theme", &name_owned);
                 }
             } else {
-                leptos::logging::warn!("Theme '{}' not found", &name_owned);
+                sinter_ui::warn!("Theme '{}' not found", &name_owned);
             }
         });
     }
@@ -186,23 +195,26 @@ impl GlobalState {
 
 // Hooks
 
-pub fn use_site_meta() -> Option<LocalResource<Result<SiteMetaData, String>>> {
+pub fn use_site_meta() -> Option<Resource<Result<SiteMetaData, String>>> {
     use_context::<GlobalState>().map(|state| state.site_meta)
 }
 
 // Ensure you provide this context in your page component!
 #[derive(Clone, Copy)]
-pub struct PageDataContext(pub LocalResource<Result<PageData, String>>);
+pub struct PageDataContext(pub Resource<Result<PageData, String>>);
 
-pub fn use_page_data() -> Option<LocalResource<Result<PageData, String>>> {
+pub fn use_page_data() -> Option<Resource<Result<PageData, String>>> {
     use_context::<PageDataContext>().map(|ctx| ctx.0)
 }
 
 #[derive(Clone, Copy)]
-pub struct CurrentPageContext(pub Signal<usize>);
+pub struct CurrentPageContext(pub ReadSignal<usize>);
 
-pub fn use_current_page() -> Signal<usize> {
+pub fn use_current_page() -> ReadSignal<usize> {
     use_context::<CurrentPageContext>()
         .map(|c| c.0)
-        .unwrap_or_else(|| Signal::derive(|| 1))
+        .unwrap_or_else(|| {
+            let (read, _) = create_signal(1);
+            read
+        })
 }

@@ -1,0 +1,12 @@
+[package]
+name = "sinter_ui_counter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sinter_ui = { path = "../../" }
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+web-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+gloo-timers = { version = "0.3", features = ["futures"] }

@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-leptos = { version = "0.8", features = ["csr"] }
+sinter_ui = { path = "../sinter_ui" }
 sinter_core = { path = "../core" }
 wasm-bindgen = "0.2"
 sinter_theme_sdk = { path = "../theme_sdk" }

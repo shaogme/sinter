@@ -92,7 +92,7 @@ pub enum ContentNode {
     // Leaf nodes
     CodeBlock {
         lang: Option<String>,
-        code: String,
+        code_text: String,
     },
     Text {
         value: String,
@@ -157,7 +157,7 @@ pub struct Post {
     pub content_ast: Vec<ContentNode>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SiteMetaData {
     pub generated_at: String, // ISO String or similar
     #[serde(default)]
@@ -169,7 +169,7 @@ pub struct SiteMetaData {
     pub total_pages: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PageData {
     pub posts: Vec<SitePostMetadata>,
     pub tags_index: HashMap<String, Vec<String>>,
