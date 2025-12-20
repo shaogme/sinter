@@ -183,7 +183,7 @@ impl Theme for DefaultLightTheme {
                             ),
                             // Posts Grid
                             div().class("py-20 px-4 min-h-[50vh]").child(
-                                div().class("container mx-auto max-w-5xl space-y-12").child((
+                                div().class("container mx-auto max-w-5xl").child((
                                     For::new(
                                         move || Ok(posts_clone.clone()),
                                         |post| post.metadata.id.clone(),
@@ -264,7 +264,7 @@ impl Theme for DefaultLightTheme {
                             ),
                             // Posts Grid
                             div().class("py-20 px-4 min-h-[50vh]").child(
-                                div().class("container mx-auto max-w-5xl space-y-12").child((
+                                div().class("container mx-auto max-w-5xl").child((
                                     For::new(
                                         move || Ok(posts_clone.clone()),
                                         |post| post.metadata.id.clone(),
@@ -495,7 +495,7 @@ fn render_post_card(post: SitePostMetadata, is_archive: bool) -> Element {
     let slug = post.metadata.slug.clone();
     let link = format!("{}{}", link_base, slug);
 
-    article().class("relative group overflow-hidden rounded-2xl transition-all duration-500 hover:-translate-y-2").child((
+    article().class("relative group overflow-hidden rounded-2xl transition-all duration-500 hover:-translate-y-2 mb-12").child((
         div().class("absolute inset-0 bg-white/60 backdrop-blur-md border border-white/50 transition-colors duration-300 group-hover:bg-white/80 shadow-lg"),
         div().class("relative p-8 sm:p-10 text-center z-10").child((
             a().attr("href", link.clone()).class("block group-hover:text-primary transition-colors").child(
