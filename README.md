@@ -10,7 +10,7 @@
 
 ## 🔗 在线文档
 
-* 官网文档: https://shaog-r.github.io/sinter/
+* 官网文档: https://shaogme.github.io/sinter/
 
 ## 🌟 核心特性 (Key Features)
 
